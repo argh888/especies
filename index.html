@@ -87,6 +87,26 @@
     }
     .loading.visible { display:block; }
 
+    /* ======= LEYENDA ======= */
+    .legend {
+      background: rgba(255,255,255,0.95);
+      padding: 10px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+      font-size: 12px;
+      line-height: 1.35;
+      max-width: 260px;
+    }
+    .legend h4 { margin: 0 0 6px 0; font-size: 13px; color: #2c3e50; }
+    .legend .row { display:flex; align-items:center; gap:8px; margin: 4px 0; }
+    .legend .dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.25);
+      flex: 0 0 12px;
+    }
+    .legend .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
     @media (max-width: 1100px) {
       .container-principal { grid-template-columns: 1fr; }
       .panel-izquierdo { max-height: none; }
@@ -147,8 +167,8 @@
       <div class="stats-panel" id="statsPanel" style="display:none;"></div>
 
       <div class="hint">
-        - El mapa se actualiza al presionar <b>Aplicar filtros</b>.<br/>
-        - Puedes filtrar por varias categorías a la vez.
+        - Los puntos se colorean por <b>Especie</b> (las primeras 12 especies visibles).<br/>
+        - La leyenda se actualiza según el filtro actual.
       </div>
 
       <div class="warn">
@@ -190,6 +210,44 @@
 
     let puntosLayer = null;
 
+    // -------------------- LEYENDA (Leaflet Control) --------------------
+    let legendControl = null;
+    function ensureLegend() {
+      if (legendControl) return;
+      legendControl = L.control({ position: "bottomright" });
+      legendControl.onAdd = () => {
+        const div = L.DomUtil.create("div", "legend");
+        div.id = "mapLegend";
+        div.innerHTML = "<h4>🎨 Leyenda</h4><div>Sin datos</div>";
+        return div;
+      };
+      legendControl.addTo(map);
+    }
+    function setLegend(items) {
+      ensureLegend();
+      const div = $("mapLegend");
+      if (!div) return;
+
+      if (!items.length) {
+        div.innerHTML = "<h4>🎨 Leyenda</h4><div>Sin datos</div>";
+        return;
+      }
+
+      const max = 12; // máximo items en leyenda para no tapar el mapa
+      const shown = items.slice(0, max);
+
+      div.innerHTML =
+        "<h4>🎨 Leyenda (Especie)</h4>" +
+        shown.map(it => `
+          <div class="row">
+            <span class="dot" style="background:${it.color}"></span>
+            <span class="name" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</span>
+            <span style="margin-left:auto; color:#7f8c8d;">${it.count}</span>
+          </div>
+        `).join("") +
+        (items.length > max ? `<div style="margin-top:6px;color:#7f8c8d;">+${items.length - max} más…</div>` : "");
+    }
+
     // -------------------- UTIL --------------------
     function toNum(v) {
       if (v === null || v === undefined) return NaN;
@@ -202,7 +260,6 @@
     function setOptions(selectEl, values) {
       const prev = selectEl.value;
       selectEl.innerHTML = `<option value="">(Todos)</option>` + values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
-      // intenta conservar el valor seleccionado
       if (values.includes(prev)) selectEl.value = prev;
     }
     function escapeHtml(str) {
@@ -211,16 +268,33 @@
       return d.innerHTML;
     }
 
-    function showStats(totalRows, filteredRows) {
+    function showStats(totalRows, filteredRows, especiesCount) {
       $("statsPanel").style.display = "grid";
       $("statsPanel").innerHTML = `
         <div class="stat-item"><div class="stat-value">${totalRows}</div><div class="stat-label">Filas CSV</div></div>
         <div class="stat-item"><div class="stat-value">${filteredRows}</div><div class="stat-label">Puntos mostrados</div></div>
+        <div class="stat-item"><div class="stat-value">${especiesCount}</div><div class="stat-label">Especies (vista)</div></div>
       `;
     }
 
+    // -------------------- COLORES POR ESPECIE --------------------
+    const PALETTE = [
+      "#e74c3c", "#3498db", "#2ecc71", "#f39c12",
+      "#9b59b6", "#1abc9c", "#e67e22", "#34495e",
+      "#d35400", "#16a085", "#c0392b", "#2980b9",
+      "#8e44ad", "#f1c40f", "#7f8c8d", "#2c3e50"
+    ];
+    function colorForKey(key) {
+      // hash simple y estable
+      const s = String(key || "—");
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
+      const idx = Math.abs(h) % PALETTE.length;
+      return PALETTE[idx];
+    }
+
     // -------------------- CARGA CSV --------------------
-    let RAW = []; // filas normalizadas con lat/lon y campos
+    let RAW = [];
     async function loadCSV() {
       $("loadingBox").classList.add("visible");
 
@@ -230,17 +304,14 @@
           download: true,
           header: true,
           skipEmptyLines: true,
-          delimiter: "", // autodetecta: coma / ; / tab
+          delimiter: "",
           encoding: "UTF-8",
           transformHeader: h => String(h).trim().replace(/^\uFEFF/, ""),
           complete: (r) => {
             try {
               if (!r.data?.length) throw new Error("CSV vacío o no se pudo leer.");
 
-              // Detectar columnas exactas
               const cols = r.meta.fields || [];
-
-              // Soporta exactamente tus nombres
               const cLat = cols.find(c => c === "Latitud_Grados_decimales") || cols.find(c => c.toLowerCase() === "latitud_grados_decimales");
               const cLon = cols.find(c => c === "Longitud_Grados_decimales") || cols.find(c => c.toLowerCase() === "longitud_grados_decimales");
               if (!cLat || !cLon) throw new Error(`No encuentro columnas de lat/lon. Columnas: ${cols.join(", ")}`);
@@ -250,7 +321,6 @@
                 let lon = toNum(row[cLon]);
 
                 // FIX: si lon viene positiva pero debería ser Oeste
-                // Heurística simple: si lat > 0 y lon > 0, lo hacemos negativo.
                 if (!isNaN(lat) && !isNaN(lon) && lat > 0 && lon > 0) lon = -lon;
 
                 return {
@@ -284,7 +354,6 @@
                 o.lon >= -180 && o.lon <= 180
               );
 
-              // Poblar selects con valores únicos
               const uniq = (arr) => [...new Set(arr.map(x => x).filter(Boolean))].sort((a,b) => a.localeCompare(b, "es"));
               setOptions($("fEspecie"), uniq(RAW.map(r => r.Especie)));
               setOptions($("fSexo"), uniq(RAW.map(r => r.Sexo)));
@@ -295,7 +364,7 @@
               setOptions($("fEstadio"), uniq(RAW.map(r => r.Estadio)));
 
               $("lastLoad").textContent = new Date().toISOString().slice(0,19).replace("T"," ");
-              showStats(r.data.length, RAW.length);
+              showStats(r.data.length, RAW.length, new Set(RAW.map(x => x.Especie)).size);
 
               resolve();
             } catch (e) {
@@ -336,7 +405,6 @@
       if (f.Anio && r.Anio !== f.Anio) return false;
       if (f.Estadio && r.Estadio !== f.Estadio) return false;
 
-      // Profundidad (si existe en la fila)
       if (!isNaN(f.ProfMin)) {
         if (isNaN(r.Profundidad) || r.Profundidad < f.ProfMin) return false;
       }
@@ -346,6 +414,20 @@
       return true;
     }
 
+    function buildLegendFromRows(rows) {
+      const counts = new Map();
+      for (const r of rows) {
+        const k = r.Especie || "—";
+        counts.set(k, (counts.get(k) || 0) + 1);
+      }
+      // ordenar por cantidad (desc)
+      const items = [...counts.entries()]
+        .map(([label, count]) => ({ label, count, color: colorForKey(label) }))
+        .sort((a,b) => b.count - a.count);
+
+      setLegend(items);
+    }
+
     function drawPoints(rows) {
       if (puntosLayer) {
         try { map.removeLayer(puntosLayer); } catch (e) {}
@@ -353,6 +435,8 @@
       puntosLayer = L.layerGroup().addTo(map);
 
       rows.forEach((r) => {
+        const col = colorForKey(r.Especie);
+
         const popup = `
           <div style="font-family:Arial;font-size:12px;min-width:220px;">
             <strong>${escapeHtml(r.Especie || "—")}</strong><br/>
@@ -374,15 +458,21 @@
           radius: 6,
           color: "#ffffff",
           weight: 2,
-          fillColor: "#3498db",
-          fillOpacity: 0.9
+          fillColor: col,
+          fillOpacity: 0.92
         }).bindPopup(popup).addTo(puntosLayer);
       });
 
-      showStats(RAW.length, rows.length);
+      const especiesVista = new Set(rows.map(r => r.Especie).filter(Boolean)).size;
+      showStats(RAW.length, rows.length, especiesVista);
+
+      buildLegendFromRows(rows);
 
       if (rows.length) {
         map.fitBounds(L.latLngBounds(rows.map(r => [r.lat, r.lon])), { padding: [40, 40], maxZoom: 15 });
+      } else {
+        // si no hay puntos, igual mantenemos la leyenda vacía
+        setLegend([]);
       }
     }
 
@@ -402,8 +492,8 @@
     // -------------------- INIT --------------------
     (async function init() {
       try {
+        ensureLegend();
         await loadCSV();
-        // primera vista: todos los puntos
         applyFilters();
       } catch (e) {
         console.error(e);
