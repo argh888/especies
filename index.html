@@ -1,125 +1,171 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <title>Mapa Interactivo de Especies</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <meta charset="UTF-8">
+  <title>Visor de Presencia de Especies</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     body {
-      margin: 0;
       font-family: 'Segoe UI', Arial, sans-serif;
-      background: #f3f7fa;
-      color: #222;
+      margin: 0;
+      padding: 0;
+      background: #f0f4fa;
     }
     header {
-      padding: 20px;
-      font-size: 2rem;
-      background: #1976d2;
+      text-align: center;
+      background: #2274A5;
       color: #fff;
-      letter-spacing: 0.5px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      padding: 18px 0 8px;
+      margin-bottom: 0.5em;
     }
-    .container {
-      display: flex;
-      min-height: calc(100vh - 65px);
-    }
-    #side-panel {
-      width: 340px;
+    .panel-filtros {
       background: #fff;
-      border-left: 2px solid #e3e7ee;
-      padding: 2rem 1rem 1rem 1rem;
-      box-shadow: -3px 0 7px rgba(0,0,0,0.04);
+      max-width: 1080px;
+      margin: 20px auto 0;
+      box-shadow: 0 1px 5px #ccd7e0;
+      padding: 18px 25px;
+      border-radius: 7px;
+      display: flex;
+      gap: 2em;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .filtro-bloque {
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      min-width: 170px;
+      gap: 0.4em;
     }
-    #side-panel h2 {
-      font-size: 1.2rem;
-      color: #1976d2;
-      margin-top: 0;
-      margin-bottom: 1.2em;
+    .filtro-bloque label {
       font-weight: 600;
+      font-size: 1em;
+      margin-bottom: 2px;
+      color: #1f2c40;
     }
-    .multiselect-list {
-      max-height: 160px;
+    #especie-list-form {
+      max-height: 185px;
       overflow-y: auto;
-      border: 1px solid #e3e7ee;
-      padding: 8px;
-      border-radius: 7px;
-      background: #f5f8fa;
-      margin-bottom: 18px;
+      border: 1px solid #d8e2ee;
+      border-radius: 3px;
+      background: #f7fafc;
+      padding: 5px;
+      min-width: 150px;
     }
     .multiselect-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 2px 0;
+      padding: 2px 0 2px 2px;
     }
-    #legend {
-      margin-top: 12px;
-      font-size: 0.95rem;
-      background: #f5f8fa;
-      border-radius: 7px;
-      padding: 10px 8px;
-      border: 1px solid #e3e7ee;
+    .multiselect-item input[type=checkbox] {
+      margin-right: 6px;
+      accent-color: #2274A5;
     }
+    .btn-filtrar {
+      background: #2274A5;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 15px;
+      margin: 10px 8px 0 0;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background 0.14s;
+    }
+    .btn-filtrar:hover {
+      background: #1b5278;
+    }
+    /* Mapa */
     #map {
-      flex: 1;
-      height: calc(100vh - 65px);
+      margin: 24px auto 0;
+      height: 540px;
+      width: 92vw;
+      max-width: 1100px;
+      border-radius: 10px;
+      box-shadow: 0 1px 8px #cbd6e6;
+      border: 1.5px solid #e5eaf2;
     }
-    select, .multiselect-list {
-      width: 100%;
-      font-size: 1rem;
+    /* Leyenda */
+    .leyenda {
+      font-size: 0.97em;
+      background: #fff;
+      border: 1px solid #d9e3ec;
+      border-radius: 6px;
+      padding: 8px 16px;
+      max-width: 420px;
+      margin: 15px auto;
+      box-shadow: 0 1px 6px #dde2ea;
+    }
+    .legend-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #135378;
+      letter-spacing: 0.5px;
     }
     .legend-row {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-bottom: 4px;
+      gap: 7px;
+      margin-bottom: 2.5px;
     }
     .legend-color {
+      display: inline-block;
       width: 15px;
       height: 15px;
-      border-radius: 50%;
-      display: inline-block;
-      border: 1px solid #ccc;
+      border-radius: 3px;
+      border: 1px solid #5f6a7a;
+      margin-right: 4px;
     }
-    @media (max-width:900px) {
-      #side-panel { width: 240px; }
-      header { padding: 14px;}
+    @media (max-width: 900px) {
+      .panel-filtros { flex-direction: column; padding: 14px 6vw;}
+      #map { height: 390px; }
     }
-    @media (max-width: 700px) {
-      .container { flex-direction: column; }
-      #side-panel { width: 100%; border-left: none; border-top: 2px solid #e3e7ee;}
-      #map { height: 350px; }
+    @media (max-width: 600px) {
+      .panel-filtros, .leyenda { padding: 7px 1vw 7px 3vw; }
+      #map { height: 60vw;}
     }
   </style>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- PapaParse para CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- getColorForSpecies utility (debes tener este archivo con función o añadirla aquí) -->
+  <script src="colors.js"></script>
 </head>
 <body>
-  <header>
-    Mapa Interactivo de Registros de Especies
-  </header>
-  <div class="container">
-    <div id="map"></div>
-    <aside id="side-panel">
-      <div>
-        <h2>Filtrar registros</h2>
-        <label><b>Especies</b></label>
-        <div id="especie-list-form" class="multiselect-list"></div>
-        <label for="sexo"><b>Sexo</b></label>
-        <select id="sexo"></select>
-        <label for="madurez"><b>Madurez</b></label>
-        <select id="madurez"></select>
-        <button id="filtrar" style="margin-top:12px;background:#1976d2;color:#fff;border:none;padding:8px 14px;border-radius:7px;font-size:1rem;">Filtrar</button>
-        <button id="reset" style="margin-top:8px;background:#eee;color:#444;border:none;padding:6px 14px;border-radius:7px;font-size:1rem;">Mostrar Todo</button>
-      </div>
-      <div id="legend"><b>Leyenda:</b><div id="legend-rows"></div></div>
-    </aside>
+<header>
+  <h1>Presencia de Especies</h1>
+</header>
+
+<div class="panel-filtros">
+  <div class="filtro-bloque">
+    <label>Especie</label>
+    <form id="especie-list-form"></form>
   </div>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="colors.js"></script>
-  <script src="app.js"></script>
+
+  <div class="filtro-bloque">
+    <label for="sexo">Sexo</label>
+    <select id="sexo">
+      <option value="">Todos</option>
+      <option value="Indeterminado">Indeterminado</option>
+      <option value="Macho">Macho</option>
+      <option value="Hembra">Hembra</option>
+    </select>
+  </div>
+
+  <div class="filtro-bloque" style="justify-content: flex-end;">
+    <button class="btn-filtrar" id="filtrar">Filtrar</button>
+    <button class="btn-filtrar" id="reset" type="button" style="background:#899bab;">Restablecer</button>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<div class="leyenda">
+  <div class="legend-title">Leyenda:</div>
+  <div id="legend-rows"></div>
+</div>
+
+<!-- Tu script principal -->
+<script src="app.js"></script>
 </body>
 </html>
