@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Presencia de Especies — Mapa (GitHub Pages)</title>
 
-  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
   <style>
@@ -52,6 +51,8 @@
     .btn-primary:hover { background: linear-gradient(135deg, #229954, #1e8449); }
     .btn-secondary { background: #95a5a6; color: white; }
     .btn-secondary:hover { background: #7f8c8d; }
+    .btn-danger { background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; }
+    .btn-danger:hover { background: linear-gradient(135deg, #c0392b, #a93226); }
 
     .mapa-header {
       display: flex; justify-content: space-between; align-items: center;
@@ -107,6 +108,68 @@
     }
     .legend .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+    /* ======= TABLA ESPECIES ======= */
+    .table-wrap {
+      margin-top: 12px;
+      border: 1px solid #e6e6e6;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .table-toolbar {
+      display:flex;
+      gap: 8px;
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      background: #fafafa;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .table-toolbar input {
+      flex: 1;
+      min-width: 140px;
+      margin: 0;
+    }
+    .mini-btn {
+      flex: 0 0 auto;
+      padding: 8px 10px;
+      font-size: 12px;
+      border-radius: 6px;
+      font-weight: 800;
+    }
+    .mini-btn.primary { background: #27ae60; color: white; }
+    .mini-btn.secondary { background: #95a5a6; color: white; }
+    .mini-btn.danger { background: #e74c3c; color: white; }
+    .mini-btn:hover { filter: brightness(0.96); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 8px 8px; text-align: left; }
+    th { background: #27ae60; color: white; position: sticky; top: 0; z-index: 1; font-size: 11px; }
+    td { border-bottom: 1px solid #eee; }
+    tr:hover { background: #eafaf1; }
+    tr:nth-child(even) { background: #fafafa; }
+    tr:nth-child(even):hover { background: #eafaf1; }
+
+    .col-color { width: 36px; }
+    .chip {
+      display:inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.25);
+      vertical-align: middle;
+    }
+    .count-badge {
+      display:inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #ecf0f1;
+      color: #2c3e50;
+      font-weight: 700;
+    }
+
     @media (max-width: 1100px) {
       .container-principal { grid-template-columns: 1fr; }
       .panel-izquierdo { max-height: none; }
@@ -131,9 +194,6 @@
       <h2>🔎 Filtros</h2>
 
       <div class="loading" id="loadingBox">⏳ Cargando <code>data/especies.csv</code>…</div>
-
-      <label for="fEspecie">Especie</label>
-      <select id="fEspecie"><option value="">(Todas)</option></select>
 
       <label for="fSexo">Sexo</label>
       <select id="fSexo"><option value="">(Todos)</option></select>
@@ -166,9 +226,31 @@
 
       <div class="stats-panel" id="statsPanel" style="display:none;"></div>
 
-      <div class="hint">
-        - Los puntos se colorean por <b>Especie</b> (las primeras 12 especies visibles).<br/>
-        - La leyenda se actualiza según el filtro actual.
+      <h2>🧬 Especies (selección)</h2>
+      <div class="hint" style="margin-top:0;">
+        Selecciona/deselecciona especies para mostrarlas en el mapa. Esta lista se actualiza con el filtro actual.
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <input id="speciesSearch" type="text" placeholder="Buscar especie..." />
+          <button class="mini-btn primary" id="btnAll">Todas</button>
+          <button class="mini-btn danger" id="btnNone">Ninguna</button>
+          <button class="mini-btn secondary" id="btnInvert">Invertir</button>
+        </div>
+        <div style="max-height: 320px; overflow:auto;">
+          <table id="speciesTable">
+            <thead>
+              <tr>
+                <th style="width:34px;"><input type="checkbox" id="speciesCheckAll" /></th>
+                <th class="col-color">Color</th>
+                <th>Especie</th>
+                <th style="width:70px;">Pts</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
 
       <div class="warn">
@@ -190,7 +272,6 @@
     </div>
   </div>
 
-  <!-- libs -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 
@@ -233,7 +314,7 @@
         return;
       }
 
-      const max = 12; // máximo items en leyenda para no tapar el mapa
+      const max = 12;
       const shown = items.slice(0, max);
 
       div.innerHTML =
@@ -271,7 +352,7 @@
     function showStats(totalRows, filteredRows, especiesCount) {
       $("statsPanel").style.display = "grid";
       $("statsPanel").innerHTML = `
-        <div class="stat-item"><div class="stat-value">${totalRows}</div><div class="stat-label">Filas CSV</div></div>
+        <div class="stat-item"><div class="stat-value">${totalRows}</div><div class="stat-label">Filas (válidas)</div></div>
         <div class="stat-item"><div class="stat-value">${filteredRows}</div><div class="stat-label">Puntos mostrados</div></div>
         <div class="stat-item"><div class="stat-value">${especiesCount}</div><div class="stat-label">Especies (vista)</div></div>
       `;
@@ -285,7 +366,6 @@
       "#8e44ad", "#f1c40f", "#7f8c8d", "#2c3e50"
     ];
     function colorForKey(key) {
-      // hash simple y estable
       const s = String(key || "—");
       let h = 0;
       for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
@@ -293,12 +373,17 @@
       return PALETTE[idx];
     }
 
+    // -------------------- ESTADO --------------------
+    let RAW = [];            // todas las filas válidas
+    let VIEW = [];           // filas después de filtros (sin selección de especies)
+    let SELECTED = new Set(); // especies seleccionadas (para mostrar)
+    let SPECIES_COUNTS_VIEW = new Map(); // conteos de especies en VIEW
+
     // -------------------- CARGA CSV --------------------
-    let RAW = [];
     async function loadCSV() {
       $("loadingBox").classList.add("visible");
-
       const url = "data/especies.csv";
+
       return new Promise((resolve, reject) => {
         Papa.parse(url, {
           download: true,
@@ -320,7 +405,7 @@
                 const lat = toNum(row[cLat]);
                 let lon = toNum(row[cLon]);
 
-                // FIX: si lon viene positiva pero debería ser Oeste
+                // FIX: lon positiva -> oeste negativa
                 if (!isNaN(lat) && !isNaN(lon) && lat > 0 && lon > 0) lon = -lon;
 
                 return {
@@ -335,27 +420,17 @@
                   Fecha_del_lance: normStr(row["Fecha_del_lance"]),
                   Profundidad: toNum(row["Profundidad_max_(m)"]),
                   Estadio: normStr(row["Estadío"]),
-                  LT: toNum(row["LT_(cm)"]),
-                  LD: toNum(row["LD_(cm)"]),
-                  AD_LS: normStr(row["AD_(rayas)_/_Lprecaudal__o_LS_(tiburones)_cm"]),
-                  Long_Int_clasper: toNum(row["Long_Int_clasper_(cm)"]),
-                  Calcif_Clasper: normStr(row["Calcif._Clasper_(NC-PC-CA)"]),
-                  Semen: normStr(row["Semen_(Si-No)"]),
-                  Peso_total: toNum(row["Peso_total_(g)"]),
-                  Phig: toNum(row["Phig_(g)"]),
-                  Pgon: toNum(row["Pgon_(g)"]),
-                  Pev: toNum(row["Pev_(g)"]),
                   lat,
                   lon
                 };
               }).filter(o =>
                 !isNaN(o.lat) && !isNaN(o.lon) &&
                 o.lat >= -90 && o.lat <= 90 &&
-                o.lon >= -180 && o.lon <= 180
+                o.lon >= -180 && o.lon <= 180 &&
+                o.Especie // especie requerida para selección
               );
 
               const uniq = (arr) => [...new Set(arr.map(x => x).filter(Boolean))].sort((a,b) => a.localeCompare(b, "es"));
-              setOptions($("fEspecie"), uniq(RAW.map(r => r.Especie)));
               setOptions($("fSexo"), uniq(RAW.map(r => r.Sexo)));
               setOptions($("fSitio"), uniq(RAW.map(r => r.Sitio)));
               setOptions($("fSustrato"), uniq(RAW.map(r => r.Sustrato)));
@@ -364,8 +439,6 @@
               setOptions($("fEstadio"), uniq(RAW.map(r => r.Estadio)));
 
               $("lastLoad").textContent = new Date().toISOString().slice(0,19).replace("T"," ");
-              showStats(r.data.length, RAW.length, new Set(RAW.map(x => x.Especie)).size);
-
               resolve();
             } catch (e) {
               reject(e);
@@ -381,10 +454,9 @@
       });
     }
 
-    // -------------------- FILTRO + DIBUJO --------------------
+    // -------------------- FILTROS --------------------
     function getFilters() {
       return {
-        Especie: $("fEspecie").value.trim(),
         Sexo: $("fSexo").value.trim(),
         Sitio: $("fSitio").value.trim(),
         Sustrato: $("fSustrato").value.trim(),
@@ -397,7 +469,6 @@
     }
 
     function matchRow(r, f) {
-      if (f.Especie && r.Especie !== f.Especie) return false;
       if (f.Sexo && r.Sexo !== f.Sexo) return false;
       if (f.Sitio && r.Sitio !== f.Sitio) return false;
       if (f.Sustrato && r.Sustrato !== f.Sustrato) return false;
@@ -414,17 +485,103 @@
       return true;
     }
 
+    // -------------------- TABLA ESPECIES (selección) --------------------
+    function computeSpeciesCounts(rows) {
+      const m = new Map();
+      for (const r of rows) {
+        const k = r.Especie;
+        m.set(k, (m.get(k) || 0) + 1);
+      }
+      return m;
+    }
+
+    function renderSpeciesTable() {
+      const tbody = $("speciesTable").querySelector("tbody");
+      const q = $("speciesSearch").value.trim().toLowerCase();
+
+      const items = [...SPECIES_COUNTS_VIEW.entries()]
+        .map(([name, count]) => ({ name, count, color: colorForKey(name) }))
+        .filter(it => !q || it.name.toLowerCase().includes(q))
+        .sort((a,b) => b.count - a.count || a.name.localeCompare(b.name, "es"));
+
+      tbody.innerHTML = "";
+
+      if (!items.length) {
+        tbody.innerHTML = `<tr><td colspan="4" style="padding:12px;color:#7f8c8d;">Sin especies para mostrar (revisa filtros).</td></tr>`;
+        $("speciesCheckAll").checked = false;
+        $("speciesCheckAll").indeterminate = false;
+        return;
+      }
+
+      for (const it of items) {
+        const tr = document.createElement("tr");
+        const checked = SELECTED.has(it.name);
+
+        tr.innerHTML = `
+          <td><input type="checkbox" class="sp-check" data-name="${escapeHtml(it.name)}" ${checked ? "checked" : ""}></td>
+          <td class="col-color"><span class="chip" style="background:${it.color}"></span></td>
+          <td title="${escapeHtml(it.name)}">${escapeHtml(it.name)}</td>
+          <td><span class="count-badge">${it.count}</span></td>
+        `;
+
+        tr.querySelector(".sp-check").addEventListener("change", (e) => {
+          const name = it.name;
+          if (e.target.checked) SELECTED.add(name);
+          else SELECTED.delete(name);
+          updateSpeciesCheckAllState();
+          drawFromView();
+        });
+
+        tbody.appendChild(tr);
+      }
+
+      updateSpeciesCheckAllState();
+    }
+
+    function updateSpeciesCheckAllState() {
+      const all = [...SPECIES_COUNTS_VIEW.keys()];
+      const selectedCount = all.filter(s => SELECTED.has(s)).length;
+
+      const el = $("speciesCheckAll");
+      if (!all.length) {
+        el.checked = false;
+        el.indeterminate = false;
+        return;
+      }
+
+      el.checked = selectedCount === all.length;
+      el.indeterminate = selectedCount > 0 && selectedCount < all.length;
+    }
+
+    function setSelectedAll(flag) {
+      const all = [...SPECIES_COUNTS_VIEW.keys()];
+      if (flag) all.forEach(s => SELECTED.add(s));
+      else SELECTED.clear();
+      updateSpeciesCheckAllState();
+      renderSpeciesTable();
+      drawFromView();
+    }
+
+    function invertSelected() {
+      const all = [...SPECIES_COUNTS_VIEW.keys()];
+      const next = new Set();
+      all.forEach(s => { if (!SELECTED.has(s)) next.add(s); });
+      SELECTED = next;
+      updateSpeciesCheckAllState();
+      renderSpeciesTable();
+      drawFromView();
+    }
+
+    // -------------------- DIBUJO + LEYENDA --------------------
     function buildLegendFromRows(rows) {
       const counts = new Map();
       for (const r of rows) {
         const k = r.Especie || "—";
         counts.set(k, (counts.get(k) || 0) + 1);
       }
-      // ordenar por cantidad (desc)
       const items = [...counts.entries()]
         .map(([label, count]) => ({ label, count, color: colorForKey(label) }))
         .sort((a,b) => b.count - a.count);
-
       setLegend(items);
     }
 
@@ -436,7 +593,6 @@
 
       rows.forEach((r) => {
         const col = colorForKey(r.Especie);
-
         const popup = `
           <div style="font-family:Arial;font-size:12px;min-width:220px;">
             <strong>${escapeHtml(r.Especie || "—")}</strong><br/>
@@ -463,29 +619,53 @@
         }).bindPopup(popup).addTo(puntosLayer);
       });
 
-      const especiesVista = new Set(rows.map(r => r.Especie).filter(Boolean)).size;
-      showStats(RAW.length, rows.length, especiesVista);
-
       buildLegendFromRows(rows);
+
+      const especiesVista = new Set(rows.map(r => r.Especie).filter(Boolean)).size;
+      showStats(VIEW.length, rows.length, especiesVista);
 
       if (rows.length) {
         map.fitBounds(L.latLngBounds(rows.map(r => [r.lat, r.lon])), { padding: [40, 40], maxZoom: 15 });
       } else {
-        // si no hay puntos, igual mantenemos la leyenda vacía
         setLegend([]);
       }
     }
 
+    function drawFromView() {
+      // aplicar selección de especies sobre VIEW
+      const rows = VIEW.filter(r => SELECTED.has(r.Especie));
+      drawPoints(rows);
+    }
+
     function applyFilters() {
       const f = getFilters();
-      const out = RAW.filter(r => matchRow(r, f));
-      drawPoints(out);
+      VIEW = RAW.filter(r => matchRow(r, f));
+
+      // recalcular especies disponibles en vista
+      SPECIES_COUNTS_VIEW = computeSpeciesCounts(VIEW);
+
+      // Si SELECTED está vacío (primera vez) o si hay especies que ya no existen en VIEW, lo normalizamos:
+      const speciesInView = new Set([...SPECIES_COUNTS_VIEW.keys()]);
+
+      if (SELECTED.size === 0) {
+        // por defecto: seleccionar todo lo que esté en la vista
+        speciesInView.forEach(s => SELECTED.add(s));
+      } else {
+        // remover seleccionadas que ya no están en la vista
+        SELECTED = new Set([...SELECTED].filter(s => speciesInView.has(s)));
+        // si quedó vacío por filtros, selecciona todo lo disponible
+        if (SELECTED.size === 0) speciesInView.forEach(s => SELECTED.add(s));
+      }
+
+      renderSpeciesTable();
+      drawFromView();
     }
 
     function clearFilters() {
-      ["fEspecie","fSexo","fSitio","fSustrato","fPosicion","fAnio","fEstadio"].forEach(id => $(id).value = "");
+      ["fSexo","fSitio","fSustrato","fPosicion","fAnio","fEstadio"].forEach(id => $(id).value = "");
       $("fProfMin").value = "";
       $("fProfMax").value = "";
+      // al limpiar, mantenemos selección (si quieres resetearla, dime)
       applyFilters();
     }
 
@@ -494,6 +674,7 @@
       try {
         ensureLegend();
         await loadCSV();
+        // primera carga: sin filtros => VIEW=RAW y SELECTED=all
         applyFilters();
       } catch (e) {
         console.error(e);
@@ -502,8 +683,19 @@
       }
     })();
 
+    // -------------------- EVENTOS --------------------
     $("btnAplicar").addEventListener("click", applyFilters);
     $("btnLimpiar").addEventListener("click", clearFilters);
+
+    $("speciesSearch").addEventListener("input", () => renderSpeciesTable());
+    $("btnAll").addEventListener("click", () => setSelectedAll(true));
+    $("btnNone").addEventListener("click", () => setSelectedAll(false));
+    $("btnInvert").addEventListener("click", () => invertSelected());
+
+    $("speciesCheckAll").addEventListener("change", (e) => {
+      // Afecta a TODAS las especies de la vista (no solo las visibles en la búsqueda)
+      setSelectedAll(e.target.checked);
+    });
   </script>
 </body>
 </html>
