@@ -1,171 +1,419 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Visor de Presencia de Especies</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Presencia de Especies — Mapa (GitHub Pages)</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
   <style>
-    body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f0f4fa;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f9; padding: 15px; color: #2c3e50; }
+
     header {
-      text-align: center;
-      background: #2274A5;
-      color: #fff;
-      padding: 18px 0 8px;
-      margin-bottom: 0.5em;
+      display: flex; align-items: center; justify-content: space-between;
+      background: linear-gradient(135deg, #2c3e50, #34495e);
+      padding: 12px 24px; color: white; border-radius: 10px;
+      margin-bottom: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      flex-wrap: wrap; gap: 10px;
     }
-    .panel-filtros {
-      background: #fff;
-      max-width: 1080px;
-      margin: 20px auto 0;
-      box-shadow: 0 1px 5px #ccd7e0;
-      padding: 18px 25px;
-      border-radius: 7px;
-      display: flex;
-      gap: 2em;
-      justify-content: center;
-      flex-wrap: wrap;
+    header h1 { font-size: 16px; font-weight: 700; }
+    header .sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+
+    .container-principal { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+    .panel-izquierdo {
+      background: #fff; padding: 18px; border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-y: auto; max-height: calc(100vh - 90px);
     }
-    .filtro-bloque {
-      display: flex;
-      flex-direction: column;
-      min-width: 170px;
-      gap: 0.4em;
+    .panel-mapa {
+      background: #fff; padding: 15px; border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; flex-direction: column;
+      min-height: 650px;
     }
-    .filtro-bloque label {
-      font-weight: 600;
-      font-size: 1em;
-      margin-bottom: 2px;
-      color: #1f2c40;
+
+    h2 { color: #6c3483; margin: 10px 0 12px; font-size: 1.1em; border-bottom: 2px solid #8e44ad; padding-bottom: 6px; }
+    label { display: block; margin-top: 10px; font-weight: 600; font-size: 13px; color: #34495e; }
+    select, input {
+      padding: 9px 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px;
+      font-size: 14px; width: 100%;
     }
-    #especie-list-form {
-      max-height: 185px;
-      overflow-y: auto;
-      border: 1px solid #d8e2ee;
-      border-radius: 3px;
-      background: #f7fafc;
-      padding: 5px;
-      min-width: 150px;
+    input:focus, select:focus { border-color: #27ae60; box-shadow: 0 0 0 3px rgba(39,174,96,0.15); outline: none; }
+
+    .btn-row { display:flex; gap:8px; margin-top: 12px; flex-wrap: wrap; }
+    button {
+      padding: 10px 14px; border: none; border-radius: 6px; cursor: pointer;
+      font-size: 14px; font-weight: 700; flex: 1;
+      transition: transform 0.2s, background 0.3s;
     }
-    .multiselect-item {
-      padding: 2px 0 2px 2px;
+    button:active { transform: scale(0.98); }
+    .btn-primary { background: linear-gradient(135deg, #27ae60, #229954); color: white; }
+    .btn-primary:hover { background: linear-gradient(135deg, #229954, #1e8449); }
+    .btn-secondary { background: #95a5a6; color: white; }
+    .btn-secondary:hover { background: #7f8c8d; }
+
+    .mapa-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 10px; padding-bottom: 10px; border-bottom: 2px solid #27ae60;
+      flex-wrap: wrap; gap: 10px;
     }
-    .multiselect-item input[type=checkbox] {
-      margin-right: 6px;
-      accent-color: #2274A5;
+    .coordenadas-cursor {
+      background: #ecf0f1; padding: 8px 14px; border-radius: 6px;
+      font-family: 'Courier New', monospace; font-size: 12px; color: #2c3e50;
+      font-weight: bold; min-width: 280px; text-align: center;
     }
-    .btn-filtrar {
-      background: #2274A5;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      padding: 8px 15px;
-      margin: 10px 8px 0 0;
-      font-size: 1em;
-      cursor: pointer;
-      transition: background 0.14s;
+    .zoom-level { background: #27ae60; color: white; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: bold; }
+    .mapa-contenedor { flex: 1; position: relative; border-radius: 8px; border: 2px solid #27ae60; overflow: hidden; }
+    #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+
+    .stats-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin-top: 12px; padding: 12px; background: #f0faf4; border-radius: 8px; }
+    .stat-item { text-align: center; padding: 8px; background: white; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .stat-item .stat-value { font-size: 1.1em; font-weight: bold; color: #27ae60; }
+    .stat-item .stat-label { font-size: 11px; color: #7f8c8d; margin-top: 2px; }
+
+    .hint { font-size: 12px; color: #7f8c8d; margin-top: 8px; line-height: 1.35; }
+    .warn { font-size: 12px; color: #856404; margin-top: 8px; line-height: 1.35; background:#fff3cd; border:1px solid #ffeeba; padding:8px 10px; border-radius:8px; }
+
+    .loading {
+      display:none;
+      margin-top: 10px;
+      font-size: 13px;
+      color: #0c5460;
+      background: #d1ecf1;
+      border-left: 4px solid #17a2b8;
+      padding: 10px 12px;
+      border-radius: 8px;
     }
-    .btn-filtrar:hover {
-      background: #1b5278;
-    }
-    /* Mapa */
-    #map {
-      margin: 24px auto 0;
-      height: 540px;
-      width: 92vw;
-      max-width: 1100px;
-      border-radius: 10px;
-      box-shadow: 0 1px 8px #cbd6e6;
-      border: 1.5px solid #e5eaf2;
-    }
-    /* Leyenda */
-    .leyenda {
-      font-size: 0.97em;
-      background: #fff;
-      border: 1px solid #d9e3ec;
-      border-radius: 6px;
-      padding: 8px 16px;
-      max-width: 420px;
-      margin: 15px auto;
-      box-shadow: 0 1px 6px #dde2ea;
-    }
-    .legend-title {
-      font-weight: bold;
-      margin-bottom: 8px;
-      color: #135378;
-      letter-spacing: 0.5px;
-    }
-    .legend-row {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      margin-bottom: 2.5px;
-    }
-    .legend-color {
-      display: inline-block;
-      width: 15px;
-      height: 15px;
-      border-radius: 3px;
-      border: 1px solid #5f6a7a;
-      margin-right: 4px;
-    }
-    @media (max-width: 900px) {
-      .panel-filtros { flex-direction: column; padding: 14px 6vw;}
-      #map { height: 390px; }
-    }
-    @media (max-width: 600px) {
-      .panel-filtros, .leyenda { padding: 7px 1vw 7px 3vw; }
-      #map { height: 60vw;}
+    .loading.visible { display:block; }
+
+    @media (max-width: 1100px) {
+      .container-principal { grid-template-columns: 1fr; }
+      .panel-izquierdo { max-height: none; }
+      .panel-mapa { min-height: 520px; }
     }
   </style>
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <!-- PapaParse para CSV -->
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <!-- getColorForSpecies utility (debes tener este archivo con función o añadirla aquí) -->
-  <script src="colors.js"></script>
 </head>
 <body>
-<header>
-  <h1>Presencia de Especies</h1>
-</header>
+  <header>
+    <div>
+      <h1>🦈 Presencia de Especies (CSV → Mapa)</h1>
+      <div class="sub">GitHub Pages · Fuente: <code>data/especies.csv</code></div>
+    </div>
+    <div style="font-size:12px; opacity:0.9;">
+      Última carga: <span id="lastLoad">—</span>
+    </div>
+  </header>
 
-<div class="panel-filtros">
-  <div class="filtro-bloque">
-    <label>Especie</label>
-    <form id="especie-list-form"></form>
+  <div class="container-principal">
+    <!-- PANEL IZQUIERDO -->
+    <div class="panel-izquierdo">
+      <h2>🔎 Filtros</h2>
+
+      <div class="loading" id="loadingBox">⏳ Cargando <code>data/especies.csv</code>…</div>
+
+      <label for="fEspecie">Especie</label>
+      <select id="fEspecie"><option value="">(Todas)</option></select>
+
+      <label for="fSexo">Sexo</label>
+      <select id="fSexo"><option value="">(Todos)</option></select>
+
+      <label for="fSitio">Sitio</label>
+      <select id="fSitio"><option value="">(Todos)</option></select>
+
+      <label for="fSustrato">Sustrato</label>
+      <select id="fSustrato"><option value="">(Todos)</option></select>
+
+      <label for="fPosicion">Posición_arte</label>
+      <select id="fPosicion"><option value="">(Todos)</option></select>
+
+      <label for="fAnio">AÑO</label>
+      <select id="fAnio"><option value="">(Todos)</option></select>
+
+      <label for="fEstadio">Estadío</label>
+      <select id="fEstadio"><option value="">(Todos)</option></select>
+
+      <label for="fProfMin">Profundidad min (m)</label>
+      <input type="number" id="fProfMin" placeholder="Ej. 0" step="0.1" />
+
+      <label for="fProfMax">Profundidad max (m)</label>
+      <input type="number" id="fProfMax" placeholder="Ej. 50" step="0.1" />
+
+      <div class="btn-row">
+        <button class="btn-primary" id="btnAplicar">📍 Aplicar filtros</button>
+        <button class="btn-secondary" id="btnLimpiar">🔄 Limpiar</button>
+      </div>
+
+      <div class="stats-panel" id="statsPanel" style="display:none;"></div>
+
+      <div class="hint">
+        - El mapa se actualiza al presionar <b>Aplicar filtros</b>.<br/>
+        - Puedes filtrar por varias categorías a la vez.
+      </div>
+
+      <div class="warn">
+        Nota: si tu CSV tiene longitudes positivas (ej. <code>110.30555</code>) pero corresponde a México (Oeste),
+        esta página las convierte automáticamente a negativas (<code>-110.30555</code>) para que el mapa sea correcto.
+      </div>
+    </div>
+
+    <!-- PANEL MAPA -->
+    <div class="panel-mapa">
+      <div class="mapa-header">
+        <h2 style="margin:0;border:none;padding:0;">🗺️ Mapa</h2>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div class="coordenadas-cursor" id="coordenadas">Lat: 0.000000 | Lon: 0.000000</div>
+          <div class="zoom-level" id="zoomLevel">Zoom: 10</div>
+        </div>
+      </div>
+      <div class="mapa-contenedor"><div id="map"></div></div>
+    </div>
   </div>
 
-  <div class="filtro-bloque">
-    <label for="sexo">Sexo</label>
-    <select id="sexo">
-      <option value="">Todos</option>
-      <option value="Indeterminado">Indeterminado</option>
-      <option value="Macho">Macho</option>
-      <option value="Hembra">Hembra</option>
-    </select>
-  </div>
+  <!-- libs -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 
-  <div class="filtro-bloque" style="justify-content: flex-end;">
-    <button class="btn-filtrar" id="filtrar">Filtrar</button>
-    <button class="btn-filtrar" id="reset" type="button" style="background:#899bab;">Restablecer</button>
-  </div>
-</div>
+  <script>
+    const $ = (id) => document.getElementById(id);
 
-<div id="map"></div>
+    // -------------------- MAPA --------------------
+    const map = L.map("map", { center: [24.142, -110.312], zoom: 10 });
+    const osmL = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OSM", maxZoom: 19 }).addTo(map);
+    const satL = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "&copy; Esri", maxZoom: 19 });
+    const topL = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenTopoMap", maxZoom: 17 });
+    L.control.layers({ "🗺️ OSM": osmL, "🛰️ Satélite": satL, "⛰️ Topo": topL }, {}, { position: "topright" }).addTo(map);
+    L.control.scale({ metric: true, imperial: false, position: "bottomleft" }).addTo(map);
 
-<div class="leyenda">
-  <div class="legend-title">Leyenda:</div>
-  <div id="legend-rows"></div>
-</div>
+    map.on("mousemove", e => { $("coordenadas").textContent = `Lat: ${e.latlng.lat.toFixed(6)} | Lon: ${e.latlng.lng.toFixed(6)}`; });
+    map.on("zoomend", () => { $("zoomLevel").textContent = `Zoom: ${map.getZoom()}`; });
 
-<!-- Tu script principal -->
-<script src="app.js"></script>
+    let puntosLayer = null;
+
+    // -------------------- UTIL --------------------
+    function toNum(v) {
+      if (v === null || v === undefined) return NaN;
+      const s = String(v).trim().replace(",", ".");
+      return parseFloat(s);
+    }
+    function normStr(v) {
+      return String(v ?? "").trim();
+    }
+    function setOptions(selectEl, values) {
+      const prev = selectEl.value;
+      selectEl.innerHTML = `<option value="">(Todos)</option>` + values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
+      // intenta conservar el valor seleccionado
+      if (values.includes(prev)) selectEl.value = prev;
+    }
+    function escapeHtml(str) {
+      const d = document.createElement("div");
+      d.textContent = String(str);
+      return d.innerHTML;
+    }
+
+    function showStats(totalRows, filteredRows) {
+      $("statsPanel").style.display = "grid";
+      $("statsPanel").innerHTML = `
+        <div class="stat-item"><div class="stat-value">${totalRows}</div><div class="stat-label">Filas CSV</div></div>
+        <div class="stat-item"><div class="stat-value">${filteredRows}</div><div class="stat-label">Puntos mostrados</div></div>
+      `;
+    }
+
+    // -------------------- CARGA CSV --------------------
+    let RAW = []; // filas normalizadas con lat/lon y campos
+    async function loadCSV() {
+      $("loadingBox").classList.add("visible");
+
+      const url = "data/especies.csv";
+      return new Promise((resolve, reject) => {
+        Papa.parse(url, {
+          download: true,
+          header: true,
+          skipEmptyLines: true,
+          delimiter: "", // autodetecta: coma / ; / tab
+          encoding: "UTF-8",
+          transformHeader: h => String(h).trim().replace(/^\uFEFF/, ""),
+          complete: (r) => {
+            try {
+              if (!r.data?.length) throw new Error("CSV vacío o no se pudo leer.");
+
+              // Detectar columnas exactas
+              const cols = r.meta.fields || [];
+
+              // Soporta exactamente tus nombres
+              const cLat = cols.find(c => c === "Latitud_Grados_decimales") || cols.find(c => c.toLowerCase() === "latitud_grados_decimales");
+              const cLon = cols.find(c => c === "Longitud_Grados_decimales") || cols.find(c => c.toLowerCase() === "longitud_grados_decimales");
+              if (!cLat || !cLon) throw new Error(`No encuentro columnas de lat/lon. Columnas: ${cols.join(", ")}`);
+
+              RAW = r.data.map((row, idx) => {
+                const lat = toNum(row[cLat]);
+                let lon = toNum(row[cLon]);
+
+                // FIX: si lon viene positiva pero debería ser Oeste
+                // Heurística simple: si lat > 0 y lon > 0, lo hacemos negativo.
+                if (!isNaN(lat) && !isNaN(lon) && lat > 0 && lon > 0) lon = -lon;
+
+                return {
+                  __idx: idx,
+                  Codigo: normStr(row["Código_individuo"]),
+                  Especie: normStr(row["Especie"]),
+                  Sexo: normStr(row["Sexo"]),
+                  Sitio: normStr(row["Sitio"]),
+                  Sustrato: normStr(row["Sustrato"]),
+                  Posicion_arte: normStr(row["Posición_arte"]),
+                  Anio: normStr(row["AÑO"]),
+                  Fecha_del_lance: normStr(row["Fecha_del_lance"]),
+                  Profundidad: toNum(row["Profundidad_max_(m)"]),
+                  Estadio: normStr(row["Estadío"]),
+                  LT: toNum(row["LT_(cm)"]),
+                  LD: toNum(row["LD_(cm)"]),
+                  AD_LS: normStr(row["AD_(rayas)_/_Lprecaudal__o_LS_(tiburones)_cm"]),
+                  Long_Int_clasper: toNum(row["Long_Int_clasper_(cm)"]),
+                  Calcif_Clasper: normStr(row["Calcif._Clasper_(NC-PC-CA)"]),
+                  Semen: normStr(row["Semen_(Si-No)"]),
+                  Peso_total: toNum(row["Peso_total_(g)"]),
+                  Phig: toNum(row["Phig_(g)"]),
+                  Pgon: toNum(row["Pgon_(g)"]),
+                  Pev: toNum(row["Pev_(g)"]),
+                  lat,
+                  lon
+                };
+              }).filter(o =>
+                !isNaN(o.lat) && !isNaN(o.lon) &&
+                o.lat >= -90 && o.lat <= 90 &&
+                o.lon >= -180 && o.lon <= 180
+              );
+
+              // Poblar selects con valores únicos
+              const uniq = (arr) => [...new Set(arr.map(x => x).filter(Boolean))].sort((a,b) => a.localeCompare(b, "es"));
+              setOptions($("fEspecie"), uniq(RAW.map(r => r.Especie)));
+              setOptions($("fSexo"), uniq(RAW.map(r => r.Sexo)));
+              setOptions($("fSitio"), uniq(RAW.map(r => r.Sitio)));
+              setOptions($("fSustrato"), uniq(RAW.map(r => r.Sustrato)));
+              setOptions($("fPosicion"), uniq(RAW.map(r => r.Posicion_arte)));
+              setOptions($("fAnio"), uniq(RAW.map(r => r.Anio)));
+              setOptions($("fEstadio"), uniq(RAW.map(r => r.Estadio)));
+
+              $("lastLoad").textContent = new Date().toISOString().slice(0,19).replace("T"," ");
+              showStats(r.data.length, RAW.length);
+
+              resolve();
+            } catch (e) {
+              reject(e);
+            } finally {
+              $("loadingBox").classList.remove("visible");
+            }
+          },
+          error: (err) => {
+            $("loadingBox").classList.remove("visible");
+            reject(err);
+          }
+        });
+      });
+    }
+
+    // -------------------- FILTRO + DIBUJO --------------------
+    function getFilters() {
+      return {
+        Especie: $("fEspecie").value.trim(),
+        Sexo: $("fSexo").value.trim(),
+        Sitio: $("fSitio").value.trim(),
+        Sustrato: $("fSustrato").value.trim(),
+        Posicion_arte: $("fPosicion").value.trim(),
+        Anio: $("fAnio").value.trim(),
+        Estadio: $("fEstadio").value.trim(),
+        ProfMin: toNum($("fProfMin").value),
+        ProfMax: toNum($("fProfMax").value)
+      };
+    }
+
+    function matchRow(r, f) {
+      if (f.Especie && r.Especie !== f.Especie) return false;
+      if (f.Sexo && r.Sexo !== f.Sexo) return false;
+      if (f.Sitio && r.Sitio !== f.Sitio) return false;
+      if (f.Sustrato && r.Sustrato !== f.Sustrato) return false;
+      if (f.Posicion_arte && r.Posicion_arte !== f.Posicion_arte) return false;
+      if (f.Anio && r.Anio !== f.Anio) return false;
+      if (f.Estadio && r.Estadio !== f.Estadio) return false;
+
+      // Profundidad (si existe en la fila)
+      if (!isNaN(f.ProfMin)) {
+        if (isNaN(r.Profundidad) || r.Profundidad < f.ProfMin) return false;
+      }
+      if (!isNaN(f.ProfMax)) {
+        if (isNaN(r.Profundidad) || r.Profundidad > f.ProfMax) return false;
+      }
+      return true;
+    }
+
+    function drawPoints(rows) {
+      if (puntosLayer) {
+        try { map.removeLayer(puntosLayer); } catch (e) {}
+      }
+      puntosLayer = L.layerGroup().addTo(map);
+
+      rows.forEach((r) => {
+        const popup = `
+          <div style="font-family:Arial;font-size:12px;min-width:220px;">
+            <strong>${escapeHtml(r.Especie || "—")}</strong><br/>
+            <b>Código:</b> ${escapeHtml(r.Codigo || "—")}<br/>
+            <b>Sexo:</b> ${escapeHtml(r.Sexo || "—")}<br/>
+            <b>Sitio:</b> ${escapeHtml(r.Sitio || "—")}<br/>
+            <b>Sustrato:</b> ${escapeHtml(r.Sustrato || "—")}<br/>
+            <b>Posición_arte:</b> ${escapeHtml(r.Posicion_arte || "—")}<br/>
+            <b>Año:</b> ${escapeHtml(r.Anio || "—")}<br/>
+            <b>Fecha lance:</b> ${escapeHtml(r.Fecha_del_lance || "—")}<br/>
+            <b>Prof. max (m):</b> ${isNaN(r.Profundidad) ? "—" : r.Profundidad}<br/>
+            <b>Estadío:</b> ${escapeHtml(r.Estadio || "—")}<br/>
+            <b>Lat:</b> ${r.lat.toFixed(6)}<br/>
+            <b>Lon:</b> ${r.lon.toFixed(6)}
+          </div>
+        `;
+
+        L.circleMarker([r.lat, r.lon], {
+          radius: 6,
+          color: "#ffffff",
+          weight: 2,
+          fillColor: "#3498db",
+          fillOpacity: 0.9
+        }).bindPopup(popup).addTo(puntosLayer);
+      });
+
+      showStats(RAW.length, rows.length);
+
+      if (rows.length) {
+        map.fitBounds(L.latLngBounds(rows.map(r => [r.lat, r.lon])), { padding: [40, 40], maxZoom: 15 });
+      }
+    }
+
+    function applyFilters() {
+      const f = getFilters();
+      const out = RAW.filter(r => matchRow(r, f));
+      drawPoints(out);
+    }
+
+    function clearFilters() {
+      ["fEspecie","fSexo","fSitio","fSustrato","fPosicion","fAnio","fEstadio"].forEach(id => $(id).value = "");
+      $("fProfMin").value = "";
+      $("fProfMax").value = "";
+      applyFilters();
+    }
+
+    // -------------------- INIT --------------------
+    (async function init() {
+      try {
+        await loadCSV();
+        // primera vista: todos los puntos
+        applyFilters();
+      } catch (e) {
+        console.error(e);
+        $("loadingBox").classList.add("visible");
+        $("loadingBox").textContent = `❌ Error cargando data/especies.csv: ${e.message || e}`;
+      }
+    })();
+
+    $("btnAplicar").addEventListener("click", applyFilters);
+    $("btnLimpiar").addEventListener("click", clearFilters);
+  </script>
 </body>
 </html>
