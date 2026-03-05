@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mapa Interactivo de Especies</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f3f7fa;
+      color: #222;
+    }
+    header {
+      padding: 20px;
+      font-size: 2rem;
+      background: #1976d2;
+      color: #fff;
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .container {
+      display: flex;
+      min-height: calc(100vh - 65px);
+    }
+    #side-panel {
+      width: 340px;
+      background: #fff;
+      border-left: 2px solid #e3e7ee;
+      padding: 2rem 1rem 1rem 1rem;
+      box-shadow: -3px 0 7px rgba(0,0,0,0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    #side-panel h2 {
+      font-size: 1.2rem;
+      color: #1976d2;
+      margin-top: 0;
+      margin-bottom: 1.2em;
+      font-weight: 600;
+    }
+    .multiselect-list {
+      max-height: 160px;
+      overflow-y: auto;
+      border: 1px solid #e3e7ee;
+      padding: 8px;
+      border-radius: 7px;
+      background: #f5f8fa;
+      margin-bottom: 18px;
+    }
+    .multiselect-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 0;
+    }
+    #legend {
+      margin-top: 12px;
+      font-size: 0.95rem;
+      background: #f5f8fa;
+      border-radius: 7px;
+      padding: 10px 8px;
+      border: 1px solid #e3e7ee;
+    }
+    #map {
+      flex: 1;
+      height: calc(100vh - 65px);
+    }
+    select, .multiselect-list {
+      width: 100%;
+      font-size: 1rem;
+    }
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .legend-color {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      display: inline-block;
+      border: 1px solid #ccc;
+    }
+    @media (max-width:900px) {
+      #side-panel { width: 240px; }
+      header { padding: 14px;}
+    }
+    @media (max-width: 700px) {
+      .container { flex-direction: column; }
+      #side-panel { width: 100%; border-left: none; border-top: 2px solid #e3e7ee;}
+      #map { height: 350px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    Mapa Interactivo de Registros de Especies
+  </header>
+  <div class="container">
+    <div id="map"></div>
+    <aside id="side-panel">
+      <div>
+        <h2>Filtrar registros</h2>
+        <label><b>Especies</b></label>
+        <div id="especie-list-form" class="multiselect-list"></div>
+        <label for="sexo"><b>Sexo</b></label>
+        <select id="sexo"></select>
+        <label for="madurez"><b>Madurez</b></label>
+        <select id="madurez"></select>
+        <button id="filtrar" style="margin-top:12px;background:#1976d2;color:#fff;border:none;padding:8px 14px;border-radius:7px;font-size:1rem;">Filtrar</button>
+        <button id="reset" style="margin-top:8px;background:#eee;color:#444;border:none;padding:6px 14px;border-radius:7px;font-size:1rem;">Mostrar Todo</button>
+      </div>
+      <div id="legend"><b>Leyenda:</b><div id="legend-rows"></div></div>
+    </aside>
+  </div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="colors.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
