@@ -2,7 +2,7 @@ let registros = [];
 let especies = [];
 let marcadores = [];
 
-const LAT_INICIAL = 24.4;   // Ajusta si deseas, centro BCS
+const LAT_INICIAL = 24.4; // Centro de tu zona
 const LON_INICIAL = -110.3;
 const ZOOM = 7;
 
@@ -13,29 +13,49 @@ Papa.parse('data/especies.csv', {
   header: true,
   download: true,
   complete: function(results) {
-    // TRUCO: muestra cómo ve PapaParse tus registros (borra luego)
-    console.log('Ejemplo de registro:', results.data[0]);
+    const columnas = Object.keys(results.data[0]);
+    alert("Detectadas columnas: \n\n" + columnas.join('\n'));
+    console.log('PRIMER REGISTRO:', results.data[0]);
 
-    // Solo registros con coordenadas no vacías
+    // EXTRA: Detecta cuál es el primer campo de lat/lon que contiene valores numéricos válidos
+    const registroEjemplo = results.data.find(r => Object.values(r).some(x => x && !isNaN(parseFloat(x))));
+    let debug = [];
+    for(const col of columnas) {
+      debug.push(`${col} = ${registroEjemplo[col]}`);
+    }
+    alert("Valores reales en el primer registro:\n\n" + debug.join('\n'));
+
+    // Trata de obtener los nombres REALES de las columnas para latitud y longitud
+    let latCol = columnas.find(c => c.toLowerCase().includes('lat'));
+    let lonCol = columnas.find(c => c.toLowerCase().includes('lon'));
+    if (!latCol || !lonCol) {
+      alert("No se detectaron columnas para latitud/longitud. Revisa el encabezado.");
+      return;
+    }
+
+    // Filtra registros válidos
     registros = results.data.filter(r =>
-      r['Latitud_Grados decimales'] && r['Longitud_Grados decimales']
+      r[latCol] && r[lonCol] && !isNaN(parseFloat(r[latCol])) && !isNaN(parseFloat(r[lonCol]))
     );
+
+    if(registros.length === 0){
+      alert("No se detectaron registros válidos (¿coordenadas vacías o mal formateadas?)");
+    }
 
     especies = [...new Set(registros.map(r => r['Especie']).filter(e => e))];
     inicializarFiltros(registros, especies);
-    dibujarPuntos(registros, especies);
+    dibujarPuntos(registros, especies, latCol, lonCol);
     renderLegenda(especies);
   }
 });
 
 function inicializarFiltros(data, especiesLista) {
-  // ESPECIE
   const especieForm = document.getElementById("especie-list-form");
   especieForm.innerHTML = especiesLista.map(especie =>
     `<div class="multiselect-item"><input type="checkbox" value="${especie}" checked> <span>${especie}</span></div>`
   ).join('');
 
-  // SEXO y MADUREZ: usa los nombres exactos, respeta espacios y tildes
+  // Filtros con nombres adaptados
   const sexoSel = document.getElementById('sexo');
   const madurezSel = document.getElementById('madurez');
   const sexos = [...new Set(data.map(r => r['Sexo  ']).filter(x => x))];
@@ -45,13 +65,13 @@ function inicializarFiltros(data, especiesLista) {
   madurezSel.innerHTML = `<option value="">Todos</option>${madureces.map(m => `<option>${m}</option>`).join('')}`;
 }
 
-function dibujarPuntos(data, especiesLista) {
+// Ajusta para pasar nombre de columna de lat/lon
+function dibujarPuntos(data, especiesLista, latCol, lonCol) {
   marcadores.forEach(m => map.removeLayer(m));
   marcadores = [];
   data.forEach(registro => {
-    // Toma el nombre exacto del campo, sin modificar nada
-    const lat = parseFloat(registro['Latitud_Grados decimales']);
-    const lon = parseFloat(registro['Longitud_Grados decimales']);
+    const lat = parseFloat(registro[latCol]);
+    const lon = parseFloat(registro[lonCol]);
     if (isNaN(lat) || isNaN(lon)) return;
 
     const color = getColorForSpecies(registro['Especie'], especiesLista);
@@ -75,37 +95,40 @@ function dibujarPuntos(data, especiesLista) {
       <b>Pescador:</b> ${registro['Pescador:'] || "-"}<br>
       <b>Sitio:</b> ${registro['Sitio:'] || "-"}<br>
       <b>Fecha campamento/desembarco:</b> ${registro['Fecha campamento /Fecha desembarco'] || "-"}<br>
-      <b>Lat:</b> ${registro['Latitud_Grados decimales']}<br>
-      <b>Lon:</b> ${registro['Longitud_Grados decimales']}
+      <b>Lat:</b> ${registro[latCol]}<br>
+      <b>Lon:</b> ${registro[lonCol]}
     `);
     marcadores.push(marker);
   });
 }
 
+// ...resto igual...
 function getEspeciesSeleccionadas() {
   return Array.from(document.querySelectorAll("#especie-list-form input[type=checkbox]:checked")).map(x => x.value);
 }
-
 function aplicarFiltro() {
   const especiesSel = getEspeciesSeleccionadas();
   const sexo = document.getElementById('sexo').value;
   const madurez = document.getElementById('madurez').value;
+
+  // Filtros adaptados: podrías agregar auto-get de nombres de columnas si lo necesitas
   const filtrados = registros.filter(r =>
     especiesSel.includes(r['Especie']) &&
     (sexo === '' || r['Sexo  '] === sexo) &&
     (madurez === '' || r['Estadío (Adulto (A) Juvenil (J) Neonato (N) Preñada (P), No definido (ND)'] === madurez)
   );
-  dibujarPuntos(filtrados, especiesSel);
+  // Vuelve a usar auto-nombres de lat/lon:
+  const columnas = Object.keys(filtrados[0]||{});
+  let latCol = columnas.find(c => c.toLowerCase().includes('lat'));
+  let lonCol = columnas.find(c => c.toLowerCase().includes('lon'));
+  dibujarPuntos(filtrados, especiesSel, latCol, lonCol);
   renderLegenda(especiesSel);
 }
-
 document.getElementById('filtrar').onclick = aplicarFiltro;
 document.getElementById('reset').onclick = function() {
   document.querySelectorAll("#especie-list-form input[type=checkbox]").forEach(inp=>inp.checked=true);
-  dibujarPuntos(registros, especies);
-  renderLegenda(especies);
+  aplicarFiltro();
 };
-
 function renderLegenda(especiesLista) {
   const legendRows = document.getElementById('legend-rows');
   legendRows.innerHTML = especiesLista.map(e =>
@@ -115,5 +138,4 @@ function renderLegenda(especiesLista) {
     </div>`
   ).join('');
 }
-
 document.getElementById('especie-list-form').addEventListener('change', aplicarFiltro);
